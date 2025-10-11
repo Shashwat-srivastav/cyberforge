@@ -9,8 +9,26 @@ const app = express();
 
 // Configure CORS for deployment
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const allowedOrigins = [
+  FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+  'https://shashwat-srivastav.github.io'
+];
+
 app.use(cors({
-  origin: [FRONTEND_URL, 'http://localhost:3000', 'http://localhost:3001', 'https://*.github.io'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, or Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.github.io')) {
+      callback(null, true);
+    } else {
+      console.log('⚠️ Blocked CORS request from:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST'],
   credentials: true
 }));
