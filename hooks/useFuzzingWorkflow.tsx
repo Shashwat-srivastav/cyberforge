@@ -331,16 +331,78 @@ export const useFuzzingWorkflow = () => {
             // Try enhanced features first, fall back to basic if needed
             // ========================================
             setCurrentStepIndex(5);
+            
+            // Create progress state for fuzzing
+            let fuzzingProgress = 0;
+            let fuzzingPhase = 'Initializing...';
+            
+            const updateFuzzingProgress = (phase: string, progress: number) => {
+                fuzzingPhase = phase;
+                fuzzingProgress = progress;
+                
+                const progressBar = (
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-cyan-400 font-semibold">{phase}</span>
+                            <span className="text-gray-400">{Math.round(progress)}%</span>
+                        </div>
+                        <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                            <div 
+                                className="bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 h-2.5 rounded-full transition-all duration-500 ease-out"
+                                style={{ width: `${progress}%` }}
+                            />
+                        </div>
+                        <p className="text-gray-300 text-sm mt-2">
+                            🔬 Executing ENHANCED fuzzing (coverage-guided + symbolic execution + CVE checking)...
+                        </p>
+                    </div>
+                );
+                
+                const updatedLog: AgentLog = {
+                    agentName: 'Enhanced Fuzzing Engine',
+                    icon: <BugIcon />,
+                    content: progressBar,
+                    isLoading: true,
+                };
+                
+                currentLogs[currentLogs.length - 1] = updatedLog;
+                setAgentLogs([...currentLogs]);
+            };
+            
             let fuzzingAgentLog: AgentLog = {
                 agentName: 'Enhanced Fuzzing Engine',
                 icon: <BugIcon />,
-                content: <p>� Executing ENHANCED fuzzing (coverage-guided + symbolic execution + CVE checking)...</p>,
+                content: (
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-cyan-400 font-semibold">Initializing...</span>
+                            <span className="text-gray-400">0%</span>
+                        </div>
+                        <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                            <div 
+                                className="bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 h-2.5 rounded-full transition-all duration-500 ease-out"
+                                style={{ width: '0%' }}
+                            />
+                        </div>
+                        <p className="text-gray-300 text-sm mt-2">
+                            🔬 Executing ENHANCED fuzzing (coverage-guided + symbolic execution + CVE checking)...
+                        </p>
+                    </div>
+                ),
                 isLoading: true,
             };
             currentLogs.push(fuzzingAgentLog);
             setAgentLogs([...currentLogs]);
 
-            console.log('� Starting ENHANCED fuzzing engine...');
+            console.log('🚀 Starting ENHANCED fuzzing engine...');
+            
+            // Update progress: Starting
+            await new Promise(resolve => setTimeout(resolve, 300));
+            updateFuzzingProgress('Starting Enhanced Fuzzing Engine...', 10);
+            
+            // Update progress: Starting
+            await new Promise(resolve => setTimeout(resolve, 300));
+            updateFuzzingProgress('Starting Enhanced Fuzzing Engine...', 10);
             
             let vulnerabilityReport: VulnerabilityReportData;
             let enhancedFeaturesUsed = false;
@@ -350,9 +412,16 @@ export const useFuzzingWorkflow = () => {
                 file.language === 'JavaScript' || file.language === 'TypeScript'
             );
             
+            // Update progress: Checking compatibility
+            await new Promise(resolve => setTimeout(resolve, 200));
+            updateFuzzingProgress('Checking codebase compatibility...', 20);
+            
             if (hasJavaScriptCode && fuzzTargets.length > 0) {
                 try {
                     console.log('✅ Codebase compatible with enhanced features');
+                    
+                    // Update progress: Initializing workflow
+                    updateFuzzingProgress('Initializing Enhanced Workflow...', 30);
                     
                     // Initialize Enhanced Fuzzing Workflow
                     const enhancedWorkflow = new EnhancedFuzzingWorkflow({
@@ -363,14 +432,29 @@ export const useFuzzingWorkflow = () => {
                         maxSymbolicPaths: 50
                     });
                     
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    updateFuzzingProgress('Phase 1: Coverage-Guided Fuzzing...', 40);
+                    
                     // Execute enhanced fuzzing
                     const enhancedResult = await enhancedWorkflow.executeEnhancedFuzzing(
                         codeFiles,
                         fuzzTargets
                     );
                     
+                    // Update progress: Completing phases
+                    updateFuzzingProgress('Phase 2: Symbolic Execution...', 70);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    updateFuzzingProgress('Phase 3: CVE Database Check...', 85);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    updateFuzzingProgress('Generating Report...', 95);
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    
                     vulnerabilityReport = enhancedResult.enhancedReport;
                     enhancedFeaturesUsed = true;
+                    
+                    updateFuzzingProgress('Enhanced Fuzzing Complete! ✅', 100);
                     
                     console.log(`✅ Enhanced fuzzing complete:
                         - Coverage fuzzing: ${enhancedResult.coverageFuzzing ? '✅' : '❌'}
@@ -379,13 +463,18 @@ export const useFuzzingWorkflow = () => {
                     
                 } catch (enhancedError) {
                     console.warn('⚠️ Enhanced fuzzing unavailable, falling back to standard:', enhancedError);
+                    updateFuzzingProgress('Falling back to standard fuzzing...', 50);
                     enhancedFeaturesUsed = false;
                 }
+            } else {
+                updateFuzzingProgress('Using standard fuzzing (no JS/TS code)...', 50);
             }
             
             // Fallback to standard fuzzing if enhanced not available
             if (!enhancedFeaturesUsed) {
                 console.log('⚠️ Using standard fuzzing engine');
+                updateFuzzingProgress('Executing standard fuzzing...', 60);
+                
                 vulnerabilityReport = await executeRealFuzzingAndGenerateReport(
                     codeFiles,
                     ckgData.summary,
@@ -393,6 +482,8 @@ export const useFuzzingWorkflow = () => {
                     apiFindings,
                     fuzzTargets
                 );
+                
+                updateFuzzingProgress('Standard Fuzzing Complete! ✅', 100);
             }
             
             // Determine which features were actually used

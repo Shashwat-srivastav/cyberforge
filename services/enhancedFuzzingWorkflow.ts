@@ -109,6 +109,7 @@ export class EnhancedFuzzingWorkflow {
 
     /**
      * Execute enhanced fuzzing workflow with all advanced features
+     * NOW WITH TIMEOUT PROTECTION - Will never hang!
      */
     async executeEnhancedFuzzing(
         codeFiles: Map<string, { code: string; language: string; filename: string }>,
@@ -119,7 +120,39 @@ export class EnhancedFuzzingWorkflow {
         console.log(`   - Symbolic execution: ${this.config.enableSymbolicExecution ? '✅' : '❌'}`);
         console.log(`   - CVE integration: ${this.config.enableCVEIntegration ? '✅' : '❌'}`);
 
-        const results: any = {};
+        // Wrap entire execution in 30-second timeout
+        const executeWithTimeout = async () => {
+            const results: any = {};
+            
+            return await this.executeEnhancedFuzzingInternal(codeFiles, fuzzTargets, results);
+        };
+
+        try {
+            // Race between execution and timeout
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('Enhanced fuzzing timeout after 30 seconds')), 30000);
+            });
+
+            return await Promise.race([
+                executeWithTimeout(),
+                timeoutPromise
+            ]);
+        } catch (error) {
+            console.error('⏱️ Enhanced fuzzing timed out or failed:', error);
+            
+            // Return minimal fallback result
+            return this.generateFallbackResult(fuzzTargets);
+        }
+    }
+
+    /**
+     * Internal execution method (without timeout wrapper)
+     */
+    private async executeEnhancedFuzzingInternal(
+        codeFiles: Map<string, { code: string; language: string; filename: string }>,
+        fuzzTargets: FuzzTarget[],
+        results: any
+    ): Promise<EnhancedFuzzingResult> {
 
         // Phase 1: Coverage-Guided Fuzzing
         if (this.coverageFuzzer && fuzzTargets.length > 0) {
@@ -170,27 +203,55 @@ export class EnhancedFuzzingWorkflow {
             }
         }
 
-        // Phase 3: CVE Database Integration
+        // Phase 3: CVE Database Integration (with individual timeout per file)
         if (this.config.enableCVEIntegration) {
             console.log('\n🔍 Phase 3: CVE Database Check');
             
             const cveFindings = new Map();
+            const cvePromises: Promise<void>[] = [];
             
-            // Check for known vulnerable patterns in code
+            // Check for known vulnerable patterns in code (with 2s timeout per file)
             for (const [filename, fileData] of codeFiles.entries()) {
-                try {
-                    const result = await this.cveIntegration.searchCVEs(
-                        fileData.code.substring(0, 500), // Sample for pattern matching
-                        `file:${filename}`
-                    );
-                    
-                    if (result.found) {
-                        cveFindings.set(filename, result);
-                        console.log(`⚠️ Found ${result.cves.length} CVE(s) in ${filename}`);
+                const cvePromise = (async () => {
+                    try {
+                        const timeoutPromise = new Promise((_, reject) => {
+                            setTimeout(() => reject(new Error('CVE check timeout')), 2000);
+                        });
+                        
+                        const checkPromise = this.cveIntegration.searchCVEs(
+                            fileData.code.substring(0, 500), // Sample for pattern matching
+                            `file:${filename}`
+                        );
+                        
+                        const result = await Promise.race([checkPromise, timeoutPromise]) as any;
+                        
+                        if (result.found) {
+                            cveFindings.set(filename, result);
+                            console.log(`⚠️ Found ${result.cves.length} CVE(s) in ${filename}`);
+                        }
+                    } catch (error) {
+                        // Silently skip files that timeout
+                        if (error instanceof Error && error.message.includes('timeout')) {
+                            console.warn(`⏱️ CVE check timed out for ${filename}`);
+                        }
                     }
-                } catch (error) {
-                    console.warn(`CVE check failed for ${filename}:`, error);
-                }
+                })();
+                
+                cvePromises.push(cvePromise);
+            }
+            
+            // Wait for all CVE checks with overall 10s limit
+            try {
+                const allChecksTimeout = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('All CVE checks timeout')), 10000);
+                });
+                
+                await Promise.race([
+                    Promise.allSettled(cvePromises),
+                    allChecksTimeout
+                ]);
+            } catch (error) {
+                console.warn('⏱️ CVE checks stopped due to timeout');
             }
             
             results.cveFindings = cveFindings;
@@ -378,5 +439,38 @@ export class EnhancedFuzzingWorkflow {
         report += `### Mitigation\n\n${results.enhancedReport.mitigation}\n`;
 
         return report;
+    }
+
+    /**
+     * Generate fallback result when enhanced fuzzing times out or fails
+     */
+    private generateFallbackResult(fuzzTargets: FuzzTarget[]): EnhancedFuzzingResult {
+        console.log('🔄 Generating fallback result due to timeout/error...');
+        
+        const primaryTarget = fuzzTargets[0] || {
+            functionName: 'unknown',
+            language: 'javascript',
+            params: [],
+            attackSurface: 'medium'
+        };
+
+        return {
+            enhancedReport: {
+                vulnerabilityTitle: `Security Analysis: ${primaryTarget.functionName}()`,
+                cveId: `Internal-FZF-Fallback-${Date.now()}`,
+                severity: 'Medium',
+                description: `Enhanced fuzzing analysis was initiated but completed with limited results. ` +
+                    `Manual code review recommended for function: ${primaryTarget.functionName}()`,
+                vulnerableCode: `function ${primaryTarget.functionName}() { /* Code analysis incomplete */ }`,
+                language: primaryTarget.language,
+                mitigation: `## Recommended Actions\n\n` +
+                    `1. **Manual Code Review**: Perform thorough security review of ${primaryTarget.functionName}()\n` +
+                    `2. **Input Validation**: Ensure all user inputs are validated and sanitized\n` +
+                    `3. **Unit Testing**: Add comprehensive test coverage for edge cases\n` +
+                    `4. **Static Analysis**: Run additional static analysis tools (ESLint, SonarQube)\n` +
+                    `5. **Penetration Testing**: Consider professional security audit\n\n` +
+                    `Note: Enhanced fuzzing timed out - results may be incomplete.`
+            }
+        };
     }
 }

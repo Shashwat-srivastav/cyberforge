@@ -94,7 +94,7 @@ const App: React.FC = () => {
                 </main>
                 
                 <footer className="text-center mt-12 text-gray-500 text-sm">
-                    <p>Powered by Mistral AI. Hackathon prototype for demonstration purposes.</p>
+                    <p>Hackathon prototype for demonstration purposes.</p>
                 </footer>
             </div>
         </div>
