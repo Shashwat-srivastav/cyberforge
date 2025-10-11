@@ -1,5 +1,0 @@
-{
-  "name": "FuzzForge",
-  "description": "An AI-driven platform that uses agentic workflows and advanced fuzzing techniques to find vulnerabilities in C++ codebases uploaded as zip files. It leverages the Gemini API to simulate code analysis, fuzz target generation, and vulnerability reporting.",
-  "requestFramePermissions": []
-}
