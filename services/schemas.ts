@@ -39,18 +39,26 @@ export const ReconResponseSchema = z.object({
 
 // API Security Schema
 export const APIFindingSchema = z.object({
-    category: z.enum([
-        'BOLA',
-        'Broken Authentication',
-        'Broken Object Property',
-        'Resource Consumption',
-        'Broken Function Level',
-        'Business Flow',
-        'SSRF',
-        'Security Misconfiguration',
-        'Inventory Management',
-        'Unsafe Consumption'
-    ]),
+    category: z.string().transform(category => {
+        // Map similar category names to our expected categories
+        const categoryMap: Record<string, string> = {
+            'Unrestricted Resource Consumption': 'Resource Consumption',
+            'Improper Inventory Management': 'Inventory Management',
+            'Security Misconfiguration': 'Security Misconfiguration',
+            'BOLA': 'BOLA',
+            'Broken Authentication': 'Broken Authentication',
+            'Broken Object Property': 'Broken Object Property',
+            'Resource Consumption': 'Resource Consumption',
+            'Broken Function Level': 'Broken Function Level',
+            'Business Flow': 'Business Flow',
+            'SSRF': 'SSRF',
+            'Inventory Management': 'Inventory Management',
+            'Unsafe Consumption': 'Unsafe Consumption'
+        };
+        
+        // Return the mapped category or the original if no mapping exists
+        return categoryMap[category] || 'Security Misconfiguration';
+    }),
     description: z.string(),
     severity: z.enum(['Critical', 'High', 'Medium', 'Low']),
     recommendation: z.string()

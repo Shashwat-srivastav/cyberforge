@@ -37,7 +37,7 @@ export interface ReconFinding {
 }
 
 export interface APIFinding {
-  category: 'BOLA' | 'Broken Authentication' | 'Broken Object Property' | 'Resource Consumption' | 'Broken Function Level' | 'Business Flow' | 'SSRF' | 'Security Misconfiguration' | 'Inventory Management' | 'Unsafe Consumption';
+  category: string; // Will be mapped to one of our standard categories
   description: string;
   severity: 'Critical' | 'High' | 'Medium' | 'Low';
   recommendation: string;
