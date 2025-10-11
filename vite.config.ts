@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
-      base: './',
+      base: '/fuzzforge/',
       build: {
         outDir: 'dist',
         sourcemap: false,

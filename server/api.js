@@ -86,6 +86,18 @@ app.post('/api/analyze', async (req, res) => {
     }
 });
 
+// Root route handler
+app.get('/', (req, res) => {
+    res.json({ 
+        name: 'FuzzForge API', 
+        status: 'running',
+        endpoints: [
+            { path: '/api/analyze', method: 'POST', description: 'Main analysis endpoint' },
+            { path: '/health', method: 'GET', description: 'Health check endpoint' }
+        ]
+    });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', apiKeyConfigured: !!MISTRAL_API_KEY });
