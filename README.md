@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🔥 FuzzForge
+# 🔥 CyberForge
 
 ### AI-Powered Security Analysis & Vulnerability Detection Platform
 
